@@ -145,24 +145,6 @@ def main():
     center_lat, center_lon, zoom, location = sidebar_components(
         states_df, cities_df, st
     )
-
-    m = folium.Map(
-        location=[center_lat, center_lon], zoom_start=zoom, max_zoom=23, tiles=None
-    )
-
-    folium.TileLayer(
-        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        attr="Esri",
-    ).add_to(m)
-    folium.TileLayer(
-        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
-        attr="Esri",
-    ).add_to(m)
-
-    if location:
-        boundary_data = get_osm_data(location)
-        filtered_coordinates = add_boundary_to_map(boundary_data, m, coordinates)
-
     st.sidebar.markdown(
         f"""
         <div style="background-color:#f0f0f5; padding: 10px; border-radius: 10px; margin-top: 20px;">
@@ -172,16 +154,44 @@ def main():
         unsafe_allow_html=True,
     )
 
-    add_tree_markers(m, filtered_coordinates)
+    try:
+        with open("map.html", "r", encoding="utf-8") as html_file:
+            html_content = html_file.read()
 
-    folium.plugins.Fullscreen(
-        position="topright",
-        title="Expand me",
-        title_cancel="Exit me",
-        force_separate_button=True,
-    ).add_to(m)
+        # Embed the HTML content in Streamlit
+        st.components.v1.html(html_content, height=600, scrolling=True)
+    except FileNotFoundError:
+        st.error(
+            "Map HTML file not found. Please ensure 'map.html' is in the correct directory."
+        )
 
-    folium_static(m)
+    # m = folium.Map(
+    #     location=[center_lat, center_lon], zoom_start=zoom, max_zoom=23, tiles=None
+    # )
+    #
+    # folium.TileLayer(
+    #     tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    #     attr="Esri",
+    # ).add_to(m)
+    # folium.TileLayer(
+    #     tiles="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+    #     attr="Esri",
+    # ).add_to(m)
+    #
+    # if location:
+    #     boundary_data = get_osm_data(location)
+    #     filtered_coordinates = add_boundary_to_map(boundary_data, m, coordinates)
+    #
+    # add_tree_markers(m, filtered_coordinates)
+    #
+    # folium.plugins.Fullscreen(
+    #     position="topright",
+    #     title="Expand me",
+    #     title_cancel="Exit me",
+    #     force_separate_button=True,
+    # ).add_to(m)
+    #
+    # folium_static(m)
 
 
 if __name__ == "__main__":
