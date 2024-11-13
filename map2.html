@@ -1,0 +1,83 @@
+<!doctype html>
+<html>
+  <head>
+    <title>3D Maps Codelab</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      gmp-map-3d {
+        height: 100%;
+        display: block;
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- Map Element with specified center, heading, tilt, and range -->
+    <gmp-map-3d
+      center="43.6425,-79.3871,400"
+      heading="30"
+      tilt="60"
+      range="1000"
+      default-labels-disabled="true"
+    >
+      <!-- Polygon will be added dynamically -->
+    </gmp-map-3d>
+
+    <!-- Google Maps API Script -->
+    <script
+      async
+      src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCOS7vCVeM7AxLZWiOCceto3tGQstE6a4M&v=alpha&libraries=maps3d"
+    ></script>
+
+    <script>
+      async function init() {
+        // Wait until the gmp-map-3d element is ready
+        const map3D = document.querySelector("gmp-map-3d");
+        await customElements.whenDefined(map3D.localName);
+
+        // Tree coordinates data (use dynamic data or static for testing)
+        const treeCoordinates = [];
+
+        // Function to generate polygon vertices based on offsets
+        function getPolygonVertices(lat, lng, lat_offset, lng_offset) {
+          return [
+            { lat: lat + lat_offset, lng: lng - lng_offset, altitude: 10 },
+            { lat: lat + lat_offset, lng: lng + lng_offset, altitude: 10 },
+            { lat: lat - lat_offset, lng: lng + lng_offset, altitude: 10 },
+            { lat: lat - lat_offset, lng: lng - lng_offset, altitude: 10 },
+          ];
+        }
+
+        // Loop through tree coordinates and create polygons
+        treeCoordinates.forEach(({ lat, lng, lat_offset, lng_offset }) => {
+          const polygon = document.createElement("gmp-polygon-3d");
+
+          // Set polygon options
+          polygon.setAttribute("altitude-mode", "absolute");
+          polygon.setAttribute("fill-color", "green");
+          polygon.setAttribute("extruded", "true");
+          polygon.setAttribute("draws-occluded-segments", "true");
+          polygon.setAttribute("altitude-mode", "relative-to-ground");
+
+          // Set the coordinates dynamically
+          polygon.outerCoordinates = getPolygonVertices(
+            lat,
+            lng,
+            lat_offset,
+            lng_offset,
+          );
+
+          // Append the polygon to the map
+          map3D.appendChild(polygon);
+        });
+      }
+
+      init();
+    </script>
+  </body>
+</html>

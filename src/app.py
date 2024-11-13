@@ -1,4 +1,5 @@
 import base64
+import json
 import os
 
 import folium
@@ -153,10 +154,20 @@ def main():
         """,
         unsafe_allow_html=True,
     )
+    coordinates_json = json.dumps(
+        [
+            {"lat": lat, "lng": lng, "lat_offset": 0.00001, "lng_offset": 0.00001}
+            for _, lat, lng, lat_offset, lng_offset in filtered_coordinates
+        ]
+    )
 
     try:
-        with open("map.html", "r", encoding="utf-8") as html_file:
+        with open("map2.html", "r", encoding="utf-8") as html_file:
             html_content = html_file.read()
+            html_content = html_content.replace(
+                "const treeCoordinates = [];",
+                f"const treeCoordinates = {coordinates_json};",
+            )
 
         # Embed the HTML content in Streamlit
         st.components.v1.html(html_content, height=600, scrolling=True)
