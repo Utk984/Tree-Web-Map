@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Photorealistic 3D Maps in Maps JavaScript Simple Marker Demo</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+
+      gmp-map-3d {
+        height: 100%;
+        width: 100%;
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      async function loadMapConfig() {
+        // Fetch API key and center coordinates from the backend
+        const response = await fetch("http://127.0.0.1:5000/map-config");
+        const config = await response.json();
+        return config;
+      }
+
+      async function init() {
+        // Load map config dynamically
+        const { api_key, center } = await loadMapConfig();
+
+        // Load the Google Maps API dynamically using the API key
+        const script = document.createElement("script");
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${api_key}&v=alpha`;
+        document.head.appendChild(script);
+
+        // Wait for the API to load
+        script.onload = async () => {
+          const { Map3DElement, Marker3DElement } =
+            await google.maps.importLibrary("maps3d");
+
+          // Initialize the map with the center from the backend
+          const map = new Map3DElement({
+            center: { ...center, altitude: 0 },
+            heading: 110,
+            tilt: 67.5,
+            range: 1000,
+          });
+
+          // Fetch tree coordinates dynamically from the backend
+          const treeResponse = await fetch("http://127.0.0.1:5000/trees");
+          const treeCoordinates = await treeResponse.json();
+
+          // Create markers for each coordinate
+          treeCoordinates.forEach(({ lat, lng }) => {
+            const marker = new Marker3DElement({
+              position: { lat, lng },
+            });
+            map.append(marker);
+          });
+
+          // Append the map to the document body
+          document.body.append(map);
+        };
+      }
+
+      init();
+    </script>
+  </body>
+</html>
