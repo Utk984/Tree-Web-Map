@@ -2,6 +2,10 @@
 <html>
   <head>
     <title>Photorealistic 3D Maps in Maps JavaScript Simple Marker Demo</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/styles.css') }}"
+    />
     <style>
       html,
       body {
@@ -18,7 +22,134 @@
     </style>
   </head>
   <body>
+    <gmp-polyline-3d
+      altitude-mode="relative-to-ground"
+      stroke-color="rgba(25, 102, 210, 1)"
+      stroke-width="10"
+    ></gmp-polyline-3d>
+    <div id="collapsible-container">
+      <button class="collapsible-toggle" onclick="toggleCollapsible()"></button>
+      <div class="collapsible-content">
+        <input type="number" id="radius-input" placeholder="Enter radius (m)" />
+        <button id="enter-btn" class="enter-icon">→</button>
+        <p id="tree-count">Total trees: 0</p>
+      </div>
+    </div>
+
+    <!-- Add Search Bar -->
+    <div
+      id="search-container"
+      style="position: absolute; top: 10px; left: 10px; z-index: 1000"
+    >
+      <div
+        style="
+          display: flex;
+          align-items: center;
+          border: 1px solid #ccc;
+          border-radius: 20px;
+          padding: 5px;
+          background: white;
+        "
+      >
+        <input
+          type="text"
+          id="places-search"
+          placeholder="Search Google Maps"
+          style="border: none; outline: none; width: 300px"
+        />
+        <button
+          id="search-btn"
+          style="
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0 5px;
+          "
+        >
+          <img
+            src="https://img.icons8.com/material-rounded/24/000000/search.png"
+            alt="Search"
+            style="filter: grayscale(100%)"
+          />
+        </button>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div id="sidebar" class="sidebar hidden">
+      <button id="closeSidebar" class="close-btn">&times;</button>
+      <h2 id="tree-id-heading" class="sidebar-heading hidden"></h2>
+      <img id="marker-image" class="sidebar-image hidden" />
+      <div id="marker-info" class="info-content"></div>
+    </div>
+
+    <!-- Toggle Container -->
+    <div id="toggle-container">
+      <label class="toggle-switch">
+        <input type="checkbox" id="toggle-markers" checked />
+        <span class="slider"></span>
+      </label>
+    </div>
+
     <script>
+      function showSidebar(
+        info,
+        imagePath,
+        treeId,
+        species,
+        description,
+        commonName,
+      ) {
+        const sidebar = document.getElementById("sidebar");
+        const markerInfo = document.getElementById("marker-info");
+        const markerImage = document.getElementById("marker-image");
+        const treeHeading = document.getElementById("tree-id-heading");
+
+        // Set marker info text
+        markerInfo.innerHTML =
+          info +
+          "<br>" +
+          "<br>" +
+          "Species: " +
+          species +
+          "<br>" +
+          "<br>" +
+          "Description: " +
+          description +
+          "<br>" +
+          "<br>" +
+          "Common Name: " +
+          commonName +
+          "<br>";
+
+        // Set and display the image
+        if (imagePath) {
+          markerImage.src = imagePath;
+          markerImage.alt = "Marker Image";
+          markerImage.classList.remove("hidden");
+        } else {
+          markerImage.classList.add("hidden");
+        }
+
+        // Set and display the heading
+        if (treeId) {
+          treeHeading.textContent = `Tree ID: ${treeId}`;
+          treeHeading.classList.remove("hidden");
+        } else {
+          treeHeading.classList.add("hidden");
+        }
+
+        // Animate the sidebar to slide in
+        sidebar.style.transition = "left 0.3s ease";
+        sidebar.style.left = "0";
+      }
+
+      document.getElementById("closeSidebar").addEventListener("click", () => {
+        const sidebar = document.getElementById("sidebar");
+        sidebar.style.transition = "left 0.3s ease";
+        sidebar.style.left = "-500px";
+      });
+
       async function loadMapConfig() {
         // Fetch API key and center coordinates from the backend
         const response = await fetch("http://127.0.0.1:5000/map-config");
@@ -26,46 +157,220 @@
         return config;
       }
 
-      async function init() {
-        // Load map config dynamically
-        const { api_key, center } = await loadMapConfig();
+      let markers = [];
+      let map;
 
-        // Load the Google Maps API dynamically using the API key
+      document
+        .getElementById("toggle-markers")
+        .addEventListener("change", (e) => {
+          const isVisible = e.target.checked;
+
+          if (isVisible) {
+            // Append markers to the map
+            markers.forEach((marker) => {
+              map.append(marker);
+            });
+          } else {
+            // Remove markers from the map
+            markers.forEach((marker) => {
+              map.removeChild(marker);
+            });
+          }
+        });
+
+      function toggleCollapsible() {
+        const container = document.getElementById("collapsible-container");
+        container.classList.toggle("active");
+      }
+
+      async function init() {
+        const { api_key, center } = await loadMapConfig();
+        const polyline = document.querySelector("gmp-polyline-3d");
+
         const script = document.createElement("script");
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${api_key}&v=alpha`;
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${api_key}&libraries=places&v=alpha`;
         document.head.appendChild(script);
 
-        // Wait for the API to load
         script.onload = async () => {
-          const { Map3DElement, Marker3DElement } =
+          const { Map3DElement, Marker3DInteractiveElement, Marker3DElement } =
             await google.maps.importLibrary("maps3d");
+          const { PinElement } = await google.maps.importLibrary("marker");
 
-          // Initialize the map with the center from the backend
-          const map = new Map3DElement({
+          map = new Map3DElement({
             center: { ...center, altitude: 0 },
             heading: 110,
             tilt: 67.5,
             range: 1000,
           });
 
-          // Fetch tree coordinates dynamically from the backend
           const treeResponse = await fetch("http://127.0.0.1:5000/trees");
           const treeCoordinates = await treeResponse.json();
 
-          // Create markers for each coordinate
-          treeCoordinates.forEach(({ lat, lng }) => {
-            const marker = new Marker3DElement({
-              position: { lat, lng },
-            });
-            map.append(marker);
+          treeCoordinates.forEach(
+            ({ id, lat, lng, imagePath, species, description, commonName }) => {
+              const marker = new Marker3DInteractiveElement({
+                position: { lat, lng },
+              });
+
+              marker.addEventListener("gmp-click", () => {
+                showSidebar(
+                  `Coordinates: (${lat}, ${lng})`,
+                  imagePath,
+                  id,
+                  species,
+                  description,
+                  commonName,
+                );
+              });
+
+              // Store the marker for toggling visibility
+              markers.push(marker);
+              map.append(marker);
+            },
+          );
+
+          document.getElementById("tree-count").textContent =
+            `Total trees: ${treeCoordinates.length}`;
+
+          // Add the map to the document
+          document.body.append(map);
+
+          // Initialize autocomplete
+          const input = document.getElementById("places-search");
+          const searchButton = document.getElementById("search-btn");
+
+          const autocomplete = new google.maps.places.Autocomplete(input, {
+            types: ["(regions)"], // Restrict search to areas
           });
 
-          // Append the map to the document body
-          document.body.append(map);
+          searchButton.addEventListener("click", () => {
+            searchPlace(autocomplete);
+          });
+
+          input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+              searchPlace(autocomplete);
+            }
+          });
+
+          function searchPlace() {
+            const searchInput = document.getElementById("places-search").value;
+
+            const service = new google.maps.places.PlacesService(
+              document.createElement("div"),
+            );
+
+            service.textSearch(
+              { query: searchInput, type: ["locality", "political"] },
+              (results, status) => {
+                if (status === google.maps.places.PlacesServiceStatus.OK) {
+                  const place = results[0]; // Use the first result
+                  if (place.geometry && place.geometry.location) {
+                    const bounds = place.geometry.bounds;
+                    console.log(bounds);
+                    const { lat, lng } = place.geometry.location.toJSON();
+                    map.center = { lat, lng, altitude: 0 };
+                    document.getElementById("places-search").value = "";
+                  } else {
+                    alert("Could not retrieve location details.");
+                  }
+                } else {
+                  alert("Search failed. Try again.");
+                }
+              },
+            );
+          }
+
+          document
+            .getElementById("search-btn")
+            .addEventListener("click", searchPlace);
+          document
+            .getElementById("places-search")
+            .addEventListener("keypress", (event) => {
+              if (event.key === "Enter") {
+                searchPlace();
+              }
+            });
+          document
+            .getElementById("enter-btn")
+            .addEventListener("click", function () {
+              const radius = parseFloat(
+                document.getElementById("radius-input").value,
+              );
+              const mapCenter = map.center;
+
+              if (radius && mapCenter.lat && mapCenter.lng) {
+                const requestData = {
+                  lat: mapCenter.lat,
+                  lng: mapCenter.lng,
+                  radius: radius,
+                };
+
+                fetch("/tree-filter", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify(requestData),
+                })
+                  .then((response) => response.json())
+                  .then((data) => {
+                    console.log("Filtered Trees:", data);
+                    document.getElementById("tree-count").textContent =
+                      `Total trees within radius: ${data.treeCount}`;
+
+                    // Remove polyline if radius is 0
+                    if (radius === 0 || data.circumferencePoints.length === 0) {
+                      document.getElementById("tree-count").textContent =
+                        "Total trees: ${treeCoordinates.length}";
+                      polyline.coordinates = [];
+                      return;
+                    }
+
+                    console.log(
+                      data.circumferencePoints.map((point) => ({
+                        lat: point.lat,
+                        lng: point.lng,
+                      })),
+                    );
+
+                    // Update polyline coordinates
+                    customElements.whenDefined(polyline.localName).then(() => {
+                      // Assuming data.circumferencePoints is an array of points with lat, lng, and altitude
+                      polyline.coordinates = data.circumferencePoints.map(
+                        (point) => ({
+                          lat: point.lat,
+                          lng: point.lng,
+                          altitude: point.altitude, // Ensure altitude is included, or use a default value if missing
+                        }),
+                      );
+                    });
+
+                    map.append(polyline);
+                  })
+                  .catch((error) => {
+                    console.error("Error fetching filtered trees:", error);
+                  });
+              } else {
+                alert("Please enter a valid radius.");
+              }
+            });
         };
       }
 
       init();
+
+      // Close sidebar when clicking anywhere outside of it
+      document.addEventListener("click", (event) => {
+        const sidebar = document.getElementById("sidebar");
+        if (
+          !sidebar.contains(event.target) &&
+          !event.target.closest("#search-container")
+        ) {
+          sidebar.style.transition = "left 0.3s ease";
+          sidebar.style.left = "-500px";
+        }
+      });
     </script>
   </body>
 </html>
